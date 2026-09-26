@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: vera-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn bot:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/healthz
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: TEAM_NAME
+        value: Vaibhavi Kansal
+      - key: TEAM_MEMBERS
+        value: Vaibhavi Kansal
+      - key: CONTACT_EMAIL
+        value: vaibhavikansal2323@gmail.com
