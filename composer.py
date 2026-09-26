@@ -387,13 +387,23 @@ def t_renewal(ctx: Ctx):
     days = ctx.p.get("days_remaining", g(ctx.m, "subscription", "days_remaining"))
     plan = ctx.p.get("plan", g(ctx.m, "subscription", "plan", default=""))
     amount = ctx.p.get("renewal_amount")
-    amt = f" ({money(amount)})" if amount else ""
+    amt = f" ({money(amount)}, about {money(round(float(amount) / 30))}/day)" if amount else ""
+    # one concrete win the renewal unlocks, from the merchant's own data
+    lapsed = ctx.agg.get("lapsed_180d_plus") or ctx.agg.get("lapsed_90d_plus")
+    calls_d = ctx.delta.get("calls_pct")
+    hook_en = hook_hi = ""
+    if lapsed:
+        hook_en = f" First thing I’d run after renewal: a win-back message to your {lapsed} lapsed {ctx.cust_noun}."
+        hook_hi = f" Renewal ke baad pehla kaam: aapke {lapsed} lapsed {ctx.cust_noun} ko win-back message."
+    elif calls_d is not None and float(calls_d) < 0:
+        hook_en = f" Calls are down {pct(calls_d)} this week, so this is the wrong time to lose visibility."
+        hook_hi = f" Is hafte calls {pct(calls_d)} gire hain, visibility khone ka yeh sahi time nahi hai."
     body = M(ctx,
-             f"{ctx.sal}, your {plan} plan renews in {days} days{amt}. Last 30 days it brought {ctx.perf_line()} to {ctx.name}. "
-             f"If it lapses, those drop off the boost. Want me to send the renewal details now? Reply YES.",
-             f"{ctx.sal}, aapka {plan} plan {days} din mein renew hona hai{amt}. Pichhle 30 din mein isse {ctx.name} ko {ctx.perf_line()} mile. "
-             f"Lapse hua toh yeh boost ruk jayega. Renewal details abhi bhej doon? Reply YES.")
-    return body, "binary_yes_no", f"Renewal due in {days} days; anchor on value delivered (30-day numbers) + loss aversion.", [ctx.sal, plan, str(days)]
+             f"{ctx.sal}, your {plan} plan renews in {days} days{amt}. Last 30 days it brought {ctx.name} {ctx.perf_line()}.{hook_en} "
+             f"Want me to send the renewal details now? Reply YES.",
+             f"{ctx.sal}, aapka {plan} plan {days} din mein renew hona hai{amt}. Pichhle 30 din mein isse {ctx.name} ko {ctx.perf_line()} mile.{hook_hi} "
+             f"Renewal details abhi bhej doon? Reply YES.")
+    return body, "binary_yes_no", f"Renewal due in {days} days; value delivered (30-day numbers), per-day cost, and a concrete next win from their own data.", [ctx.sal, plan, str(days)]
 
 
 def t_winback(ctx: Ctx):
@@ -451,6 +461,10 @@ def t_curious(ctx: Ctx):
     offers = ", ".join(ctx.active_offers[:2])
     cur = f" Is it still {offers}, or something new?" if offers else ""
     cur_hi = f" Abhi bhi {offers}, ya kuch naya?" if offers else ""
+    trend = (ctx.cat.get("trend_signals") or [None])[0]
+    if trend and trend.get("query") and trend.get("delta_yoy") is not None:
+        cur += f" (For context: '{trend['query']}' searches are up {pct(trend['delta_yoy'])} YoY.)"
+        cur_hi += f" (Context: '{trend['query']}' searches {pct(trend['delta_yoy'])} YoY badhi hain.)"
     body = M(ctx,
              f"Hi {ctx.sal}! Quick one — which service was most asked-for at {ctx.name} this week?{cur} "
              f"Reply with just the name — I’ll turn it into a Google post + a ready WhatsApp reply for price questions. 5 min, zero effort from you.",
