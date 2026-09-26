@@ -3,7 +3,7 @@ Tiny LLM client. Default = Groq (free, fast, OpenAI-compatible API).
 
 Env vars:
   GROQ_API_KEY   your Groq key (https://console.groq.com/keys)
-  LLM_MODEL      default "llama-3.3-70b-versatile"
+  LLM_MODEL      default "openai/gpt-oss-120b"
   LLM_BASE_URL   default Groq; any OpenAI-compatible endpoint works
   LLM_API_KEY    use instead of GROQ_API_KEY for other providers
   LLM_TIMEOUT    seconds per call (default 9)
@@ -22,7 +22,7 @@ from typing import Optional
 import httpx
 
 BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
-MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 TIMEOUT = float(os.getenv("LLM_TIMEOUT", "9"))
 
 
@@ -60,6 +60,10 @@ async def chat_json(system: str, user: str, max_tokens: int = 500,
             {"role": "user", "content": user},
         ],
     }
+    if "gpt-oss" in MODEL or "qwen3" in MODEL:
+        # reasoning models: keep thinking short (speed) and leave room for the answer
+        payload["reasoning_effort"] = os.getenv("LLM_REASONING", "low")
+        payload["max_tokens"] = max_tokens + 1500
     try:
         r = await _get_client().post(
             f"{BASE_URL}/chat/completions",
@@ -70,7 +74,7 @@ async def chat_json(system: str, user: str, max_tokens: int = 500,
         if r.status_code != 200:
             print(f"[llm] HTTP {r.status_code}: {r.text[:200]}")
             return None
-        text = r.json()["choices"][0]["message"]["content"]
+        text = r.json()["choices"][0]["message"].get("content") or ""
         m = re.search(r"\{[\s\S]*\}", text)
         return json.loads(m.group()) if m else None
     except Exception as e:  # timeout, network, bad JSON
