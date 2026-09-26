@@ -27,6 +27,29 @@ from conversation_handlers import new_state, respond
 app = FastAPI(title="Vera bot")
 START = time.time()
 
+
+# Keep-alive: Render's free plan sleeps after 15 min without traffic (and wipes memory).
+# Render sets RENDER_EXTERNAL_URL automatically, so the bot pings its own public URL
+# every 10 minutes to stay awake. Does nothing when run locally.
+async def _keep_alive():
+    import httpx
+    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("KEEP_ALIVE_URL")
+    if not url:
+        return
+    await asyncio.sleep(60)
+    async with httpx.AsyncClient(timeout=20) as client:
+        while True:
+            try:
+                await client.get(url.rstrip("/") + "/v1/healthz")
+            except Exception as e:
+                print(f"[keep-alive] ping failed: {e}")
+            await asyncio.sleep(600)
+
+
+@app.on_event("startup")
+async def _start_keep_alive():
+    asyncio.create_task(_keep_alive())
+
 TICK_BUDGET_S = float(os.getenv("TICK_BUDGET_S", "11"))   # stay well under the judge's timeout
 MAX_ACTIONS_PER_TICK = int(os.getenv("MAX_ACTIONS_PER_TICK", "20"))
 VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
